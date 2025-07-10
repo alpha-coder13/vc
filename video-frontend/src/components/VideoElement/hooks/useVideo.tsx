@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react"
 interface VideoStream{
-    stream : Promise<MediaStream>,
+    stream : Promise<MediaStream> | null,
 }
 const useVideo:Function = ()=>{
 
-    const [videoStream , setVideoStream] = useState<VideoStream | null>(null);
+    const [videoStream , setVideoStream] = useState<VideoStream>({stream : null});
     
     useEffect(()=>{
         if(window){

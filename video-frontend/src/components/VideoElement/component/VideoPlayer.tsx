@@ -5,6 +5,7 @@ import useVideo from '../hooks/useVideo';
 interface VideoPlayerProps {
   RTCConnection:React.RefObject< RTCPeerConnection> ,
   mode :string | undefined, 
+  connectionState:null | string,
 }
 
 interface VideoStream{
@@ -18,43 +19,48 @@ const UserIcon: React.FC = () => (
 );
 
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connectionState }) => {
 
   const video : VideoStream = useVideo();
   const [streamState, setStreamState] = useState<Boolean>(false); 
   const videoElementRef = useRef<HTMLVideoElement>(null);
+  const [incomingMediaStream, setIncomingMediaStream] = useState<MediaStream>(null); 
 
   // const videoElementStreamRef= useRef<Document | null>(null);
       useEffect(()=>{
-          if(mode == 'local'){
-              if(video && RTCConnection.current !== null){
+              if(video.stream && RTCConnection.current && mode == 'local'){
                 video.stream.then((stream)=>{
                 setStreamState(true);
                     if(videoElementRef.current){
                         videoElementRef.current.srcObject = stream;
                         videoElementRef.current.play().catch(console.error);
                         stream.getTracks().forEach((track:MediaStreamTrack) => {
+                          console.log(track)
                             RTCConnection.current.addTrack(track, stream);
                     });
                         console.log(stream);
                     }
                 }).catch(console.error);
-            }
-          }else{
-            if(RTCConnection?.current){
-            RTCConnection.current.addEventListener('track',(e)=>{
-                console.log("track found")
-                setStreamState(true);
-                if(videoElementRef.current){
-                    videoElementRef.current.srcObject = e.streams[0];
+               }
+             else if(RTCConnection.current && mode == 'Remote'){
+                RTCConnection.current.addEventListener('track',(e)=>{
+                    setStreamState(true);
+                    setIncomingMediaStream(e.streams[0]);
+                })
+              }
+      },[video.stream,RTCConnection, mode])
+
+      useEffect(()=>{
+            if(videoElementRef.current && mode == 'Remote' && connectionState == "connected"){
+                    videoElementRef.current.srcObject = incomingMediaStream;
                     videoElementRef.current.play().catch(console.error);
-                }
-            })
-        }
-          }
-      },[video, RTCConnection])
+            }
+      },[mode, connectionState])
   
-  return (
+
+  if(mode == 'Remote' && connectionState !== "connected")return <></>;
+
+  return ( 
     <div className="relative flex-1 bg-black rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center">
 
         <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
@@ -63,7 +69,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode }) => {
             <UserIcon/>
         </div> }
         <video ref={videoElementRef} className="absolute inset-0 bg-slate-800 flex items-center justify-center h-full w-full"  style={{transform:"rotateY(180deg)"}} autoPlay muted playsInline></video>
-        
       </div>
 
     </div>
