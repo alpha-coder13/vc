@@ -14,7 +14,7 @@ const useVideo = (height, width)=>{
                 width : {min : width , ideal : 1920},
                 frames:{min : 30, ideal:90}
             };
-            setVideoStream(Navigator.mediaDevices.getUserMedia(userMediaObject));
+            setVideoStream(Navigator.mediaDevices?.getUserMedia(userMediaObject));
         }
     },[]);
 

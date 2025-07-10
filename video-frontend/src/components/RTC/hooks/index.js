@@ -19,7 +19,7 @@ const useRTC = (videoSourceRef) => {
             }
         ]
     }
-    const Signalling = useRef(io("ws://localhost:2001/",{
+    const Signalling = useRef(io("wss://vc-service.onrender.com/",{
         autoConnect:false,
     }));
     const RTCConnection = useRef();
