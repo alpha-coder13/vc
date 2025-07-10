@@ -4,7 +4,7 @@ import LoginScreen from './components/LoginScreen';
 import MainLayout from './components/MainLayout';
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
 
   const handleLogin = useCallback(() => {
     // In a real app, you would perform JWT validation here.
@@ -18,7 +18,7 @@ const App: React.FC = () => {
 
   return (
     <div className="bg-slate-900 text-gray-200 min-h-screen w-full">
-      {true ? (
+      {isAuthenticated ? (
         <MainLayout onLogout={handleLogout} />
       ) : (
         <LoginScreen onLogin={handleLogin} />

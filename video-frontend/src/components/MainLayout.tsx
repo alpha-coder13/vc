@@ -1,13 +1,17 @@
 
 import React from 'react';
-import VideoPlayer from './VideoPlayer';
+import VideoPlayer from './VideoElement/component/VideoPlayer';
 import ChatBox from './ChatBox';
+import useRTC from './RTC/hooks';
 
 interface MainLayoutProps {
   onLogout: () => void;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
+
+
+  const {RTCConnection} = useRTC();
   return (
     <div className="flex flex-col h-screen bg-slate-900">
       <header className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 shadow-md">
@@ -21,8 +25,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
       </header>
       <main className="flex-1 p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 overflow-hidden">
         <div className="lg:col-span-2 flex flex-col gap-4 lg:gap-6">
-          <VideoPlayer title="Remote Participant" />
-          <VideoPlayer title="Local Preview" />
+          <VideoPlayer  RTCConnection={RTCConnection} mode={"local"} />
+          <VideoPlayer  RTCConnection={RTCConnection} mode={"Remote"} />
         </div>
         <div className="lg:col-span-1 flex flex-col h-full">
           <ChatBox />

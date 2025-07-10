@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage } from '../types';
+import { ChatMessage } from './types';
 import SendIcon from './icons/SendIcon';
 
 const initialMessages: ChatMessage[] = [
