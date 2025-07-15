@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface AudioProps {
-          RTCPeerConnection:React.RefObject< RTCPeerConnection> ,
+    RTCPeerConnection:React.RefObject< RTCPeerConnection> ,
+    MediaStreamSent:React.RefObject<MediaStream>
     
 }
 
-const useAudioIn = ({RTCPeerConnection} :AudioProps) =>{
+const useAudioIn = ({RTCPeerConnection ,MediaStreamSent} :AudioProps) =>{
     const [audioStream, setAudioStream] = useState<MediaStreamTrack | null>(null);
     const config = {
         audio : true,
@@ -15,49 +16,55 @@ const useAudioIn = ({RTCPeerConnection} :AudioProps) =>{
             const Navigator = window.navigator;
             navigator.mediaDevices.getUserMedia(config).then((stream) => { 
                 const primaryAudioTrack = stream.getAudioTracks()[0];
-                RTCPeerConnection.current?.addTrack(primaryAudioTrack,stream);
-                // primaryAudioTrack.onmute = () => {
-                //     console.log('called');
-                //     const senders = RTCPeerConnection.current?.getSenders()
-                //     for(let tracks of senders){
-                //         if(tracks.track?.id == primaryAudioTrack.id){
-                //             tracks.replaceTrack(null);
-                //         }
-                //     }
-                // } 
-                // primaryAudioTrack.onunmute = () => {
-                //     console.log('called unmute')
-                //     RTCPeerConnection.current?.addTrack(primaryAudioTrack, stream)
-                // }
+                if(RTCPeerConnection.current && MediaStreamSent.current){
+                    MediaStreamSent.current.addTrack(primaryAudioTrack);
+                    RTCPeerConnection.current?.addTrack(primaryAudioTrack, MediaStreamSent.current);
+                }
                 setAudioStream(primaryAudioTrack);
             }).catch((err)=>{
                 console.log(err)
             });
         }
-    },[RTCPeerConnection.current]);
+    },[RTCPeerConnection.current, MediaStreamSent.current]);
 
     return audioStream ;
 }
 
 
-const useAudioOut = ({RTCPeerConnection} :AudioProps)=>{
-  const [audioOutputStream, setAudioOutputStream] = useState<Set<MediaStream>>(new Set())
+interface AudioOutProps {
+    RTCPeerConnection:React.RefObject< RTCPeerConnection> ,
+    SelfMediaTrack: MediaStreamTrack | null,
+    
+}
+
+const useAudioOut = ({RTCPeerConnection,SelfMediaTrack} :AudioOutProps)=>{
+  const audioOutputStream = useRef<AudioContext[]>([])
     useEffect(()=>{
-        RTCPeerConnection.current?.addEventListener('track',(e :RTCTrackEvent)=>{
+        // const audioContexts:AudioContext[] = []; 
+        if(RTCPeerConnection.current){
+        RTCPeerConnection.current.addEventListener('track',(e :RTCTrackEvent)=>{
+            console.log(e)
             const {streams}  = e;
             for(let stream of streams){
                 if(stream.getAudioTracks().length > 0){
-                    if(!audioOutputStream.has(stream)){
-                        const newSet:Set<MediaStream> = new Set();
-                        audioOutputStream.forEach(val => newSet.add(val));
-                        newSet.add(stream);
-                        setAudioOutputStream(newSet);
-                    }
+                    stream.getAudioTracks()[0].onmute = console.log;
+                    if(stream.getAudioTracks()[0].id == SelfMediaTrack)return;
+                          const newAudioContext =  new AudioContext();
+                          const track = newAudioContext.createMediaStreamSource(stream);
+                          track.connect(newAudioContext.destination);
+                          audioOutputStream.current.push(newAudioContext);
                 }
             } 
-        })
-    },[RTCPeerConnection.current,audioOutputStream])
-    return audioOutputStream
+        })}
+
+        return () => { // return fucntion handles performance issues
+            audioOutputStream.current.forEach(ctx => {
+                ctx.close();
+            });
+             audioOutputStream.current = [];
+        };
+    },[RTCPeerConnection.current,SelfMediaTrack])
+    // return audioOutputStream
 }
 
 export {useAudioIn,useAudioOut} ;

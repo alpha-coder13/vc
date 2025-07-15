@@ -32,7 +32,7 @@ const JoinLobby = ({ onJoin }) => {
 const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
 
 
-  const {makeCall, hangup, connectionState,RTCConnection} = useRTC();
+  const {makeCall, hangup, connectionState,RTCConnection,MediaStreamSent} = useRTC();
   return (
     <div className="flex flex-col h-screen bg-slate-900">
       <header className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 shadow-md">
@@ -46,9 +46,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
       </header>
       <main className="flex-1 p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 overflow-hidden">
         <div className="lg:col-span-2 flex flex-col gap-4 lg:gap-6">
-          <VideoPlayer  RTCConnection={RTCConnection} mode={"Remote"} connectionState={connectionState}><></></VideoPlayer>
-          <VideoPlayer  RTCConnection={RTCConnection} mode={"local"} connectionState={null}>
-            <AudioComponent RTCPeerConnection={RTCConnection}/>
+          <VideoPlayer  RTCConnection={RTCConnection} mode={"Remote"} connectionState={connectionState} MediaStreamSent={undefined}><></></VideoPlayer>
+          <VideoPlayer  RTCConnection={RTCConnection} mode={"local"} connectionState={null} MediaStreamSent={MediaStreamSent}>
+            <AudioComponent RTCPeerConnection={RTCConnection} MediaStreamSent={MediaStreamSent}/>
           </VideoPlayer>
         </div>
         <div className="lg:col-span-1 flex flex-col h-full">

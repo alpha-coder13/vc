@@ -6,7 +6,9 @@ interface VideoPlayerProps {
   RTCConnection:React.RefObject< RTCPeerConnection> ,
   mode :string | undefined, 
   connectionState:null | string,
-  children:any
+  children:any,
+  MediaStreamSent:React.RefObject<MediaStream> | undefined
+  
 }
 
 interface VideoStream{
@@ -20,7 +22,7 @@ const UserIcon: React.FC = () => (
 );
 
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connectionState,children }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connectionState,children, MediaStreamSent }) => {
 
   const video : VideoStream = useVideo();
   const [streamState, setStreamState] = useState<Boolean>(false); 
@@ -32,13 +34,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connecti
               if(video.stream && RTCConnection.current && mode == 'local'){
                 video.stream.then((stream)=>{
                 setStreamState(true);
-                    if(videoElementRef.current){
+                const videoTrack = stream.getVideoTracks()[0]
+
+                    if(videoElementRef.current && MediaStreamSent.current){
                         videoElementRef.current.srcObject = stream;
                         videoElementRef.current.play().catch(console.error);
-                        stream.getTracks().forEach((track:MediaStreamTrack) => {
-                          console.log(track)
-                            RTCConnection.current.addTrack(track, stream);
-                    });
+                        MediaStreamSent?.current.addTrack(videoTrack);
+                        RTCConnection.current.addTrack(videoTrack,MediaStreamSent.current);
                         console.log(stream);
                     }
                 }).catch(console.error);
@@ -46,10 +48,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connecti
              else if(RTCConnection.current && mode == 'Remote'){
                 RTCConnection.current.addEventListener('track',(e)=>{
                     setStreamState(true);
-                    setIncomingMediaStream(e.streams[0]);
+                    const {streams} = e;
+                    if(streams.length !=0){
+                      for(let stream of streams ){
+                        if(stream.getVideoTracks().length > 0){
+                         setIncomingMediaStream(stream);
+                         break;
+                        }
+                      }
+                    }else{
+                      // const createVideoStream()
+                    }
+                    
                 })
               }
-      },[video.stream,RTCConnection, mode])
+      },[video.stream,RTCConnection, mode,MediaStreamSent])
 
       useEffect(()=>{
             if(videoElementRef.current && mode == 'Remote' && connectionState == "connected"){

@@ -19,14 +19,17 @@ const useRTC = (videoSourceRef) => {
             }
         ]
     }
-    const Signalling = useRef(io("wss://vc-service.onrender.com/",{
+    // const Signalling = useRef(io("wss://vc-service.onrender.com/",{
+    //     autoConnect:false,
+    // }));
+    const Signalling = useRef(io("ws://localhost:3001/",{
         autoConnect:false,
     }));
     const RTCConnection = useRef();
     const [connectionState, setConnectionState] = useState("new");
     const [signalingState , setSignallingState]  = useState("");
 
-    
+    const MediaStreamSent = useRef(new MediaStream());
 
     useEffect(()=>{
 
@@ -52,7 +55,7 @@ const useRTC = (videoSourceRef) => {
 
         RTCConnection.current.onicecandidate = (event) => {
             if(event.candidate){
-                console.log(event);
+                // console.log(event);
                 Signalling.current.emit('iceCandidate', event.candidate)
             }
         } 
@@ -65,29 +68,29 @@ const useRTC = (videoSourceRef) => {
             try{
                 // if(RTCConnection.current.signalingState !=='stable'){
                     if(data.answer){
-                  console.log("Answer packet received :", data.answer);
+                //   console.log("Answer packet received :", data.answer);
                     const remoteDesc = new RTCSessionDescription(data.answer);
                     await RTCConnection.current.setRemoteDescription(remoteDesc);
-                  console.log("Answer packet successfully set");
+                //   console.log("Answer packet successfully set");/
                     return;
                      }
                     if(data.offer){
-                        console.log("offer packet received :", data.offer);
+                        // console.log("offer packet received :", data.offer);
                         const remoteDesc = new RTCSessionDescription(data.offer);
                         await RTCConnection.current.setRemoteDescription(remoteDesc);
-                        console.log("remote desc offer packet set");
+                        // console.log("remote desc offer packet set");
                         const answer = await rtcConnection.createAnswer();
                         await RTCConnection.current.setLocalDescription(answer);
-                        console.log("local desc answer packet set");
+                        // console.log("local desc answer packet set");
                         Signalling.current.emit('sendAnswer',{'answer':answer});
-                        console.log("local desc answer packet sent");
+                        // console.log("local desc answer packet sent");
                         return;
                     }
                     // console.log(data);
                     if(data.iceCandidate){
                         
                         await RTCConnection.current.addIceCandidate(data.iceCandidate);
-                        console.log("Ice candidates added");
+                        // console.log("Ice candidates added");
                     }
                 // }
                 
@@ -127,7 +130,7 @@ const useRTC = (videoSourceRef) => {
 
     };
 
-    return {makeCall, hangup, connectionState, RTCConnection}
+    return {makeCall, hangup, connectionState, RTCConnection, MediaStreamSent}
 }
 
 

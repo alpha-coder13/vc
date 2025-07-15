@@ -4,38 +4,62 @@ import {useAudioIn, useAudioOut} from '../hooks/useAudio';
 
 interface AudioPlayerProps{
       RTCPeerConnection:React.RefObject< RTCPeerConnection> ,
+        MediaStreamSent:React.RefObject<MediaStream>
+      
 }
 
-const AudioComponent:React.FC<AudioPlayerProps> = ({RTCPeerConnection}:AudioPlayerProps) => {
-  const audioIn = useAudioIn({RTCPeerConnection});
-  const audioOut = useAudioOut({RTCPeerConnection});
+const AudioComponent:React.FC<AudioPlayerProps> = ({RTCPeerConnection , MediaStreamSent}:AudioPlayerProps) => {
+  const audioIn = useAudioIn({RTCPeerConnection, MediaStreamSent});
+  const audioOut = useAudioOut({RTCPeerConnection, audioIn});
 
-  const [isMuted, setMuted] =  useState(audioIn?.enabled);
+  const [isMuted, setMuted] =  useState(false);
 
   const toggleMute = () => {
         setMuted((prev) => {
-            if(audioIn){
-                audioIn.enabled = !prev;
-            }
+                if(RTCPeerConnection.current){
+                    const senders = RTCPeerConnection.current?.getSenders()
+                        for(let tracks of senders){
+                            if(tracks.track?.id == audioIn?.id){
+                                const tracklocal = tracks.track;
+                                tracklocal.enabled = !tracklocal.enabled
+                                tracks.replaceTrack(tracklocal).then(()=>{
+                                    console.log('track replaced sucessfully');
+                                }).catch(e=>
+                                    console.log(e)
+                                )
+                            }
+                        }
+                }            
             return !prev;
         });
     }
 
-    useEffect(()=>{
-        const audioContexts:AudioContext[] = []; 
-        [...audioOut.entries()].map(([val1,val2]) => {
-            const newAudioContext =  new AudioContext();
-            const track = newAudioContext.createMediaStreamSource(val2);
-            track.connect(newAudioContext.destination);
-            audioContexts.push(newAudioContext);
-        });
-        
-        return () => { // return fucntion handles performance issues
-            audioContexts.forEach(ctx => {
-                ctx.close();
-            });
-        };
-    },[audioOut])
+
+
+        // useEffect(()=>{
+            
+        //     const audioContexts:AudioContext[] = []; 
+        //     [...audioOut.entries()].map(([val1,val2]) => {
+        //         const audioTrackArray = val2.getAudioTracks(); // removing echo 
+        //         if(audioTrackArray.length == 0)return;
+        //         const removingSameMediaStream = new MediaStream();
+        //         audioTrackArray.forEach((val)=>{
+        //             if(val.id !== audioIn?.id){
+        //                 removingSameMediaStream.addTrack(val);
+        //             }
+        //         })
+        //         const newAudioContext =  new AudioContext();
+        //         const track = newAudioContext.createMediaStreamSource(removingSameMediaStream);
+        //         track.connect(newAudioContext.destination);
+        //         audioContexts.push(newAudioContext);
+        //     });
+            
+        //     return () => { // return fucntion handles performance issues
+        //         audioContexts.forEach(ctx => {
+        //             ctx.close();
+        //         });
+        //     };
+        // },[audioOut, audioIn?.id])
 
 
   return (
