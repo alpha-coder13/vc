@@ -3,6 +3,7 @@ import React from 'react';
 import VideoPlayer from './VideoElement/component/VideoPlayer';
 import ChatBox from './ChatBox';
 import useRTC from './RTC/hooks';
+import AudioComponent from './AudioElement/components/AudioComponent';
 
 interface MainLayoutProps {
   onLogout: () => void;
@@ -45,8 +46,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
       </header>
       <main className="flex-1 p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 overflow-hidden">
         <div className="lg:col-span-2 flex flex-col gap-4 lg:gap-6">
-          <VideoPlayer  RTCConnection={RTCConnection} mode={"local"} connectionState={null}/>
-          <VideoPlayer  RTCConnection={RTCConnection} mode={"Remote"} connectionState={connectionState}/>
+          <VideoPlayer  RTCConnection={RTCConnection} mode={"Remote"} connectionState={connectionState}><></></VideoPlayer>
+          <VideoPlayer  RTCConnection={RTCConnection} mode={"local"} connectionState={null}>
+            <AudioComponent RTCPeerConnection={RTCConnection}/>
+          </VideoPlayer>
         </div>
         <div className="lg:col-span-1 flex flex-col h-full">
           {connectionState == 'connected' && <ChatBox />}

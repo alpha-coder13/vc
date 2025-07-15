@@ -1,11 +1,12 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { ReactNode, useEffect, useRef, useState } from 'react';
 import useVideo from '../hooks/useVideo';
 
 interface VideoPlayerProps {
   RTCConnection:React.RefObject< RTCPeerConnection> ,
   mode :string | undefined, 
   connectionState:null | string,
+  children:any
 }
 
 interface VideoStream{
@@ -19,7 +20,7 @@ const UserIcon: React.FC = () => (
 );
 
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connectionState }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connectionState,children }) => {
 
   const video : VideoStream = useVideo();
   const [streamState, setStreamState] = useState<Boolean>(false); 
@@ -70,7 +71,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connecti
         </div> }
         <video ref={videoElementRef} className="absolute inset-0 bg-slate-800 flex items-center justify-center h-full w-full"  style={{transform:"rotateY(180deg)"}} autoPlay muted playsInline></video>
       </div>
-
+        {children}
     </div>
   );
 };
