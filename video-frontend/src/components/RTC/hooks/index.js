@@ -19,12 +19,12 @@ const useRTC = (videoSourceRef) => {
             }
         ]
     }
-    // const Signalling = useRef(io("wss://vc-service.onrender.com/",{
-    //     autoConnect:false,
-    // }));
-    const Signalling = useRef(io("ws://localhost:3001/",{
+    const Signalling = useRef(io("wss://vc-service.onrender.com/",{
         autoConnect:false,
     }));
+    // const Signalling = useRef(io("ws://localhost:3001/",{
+    //     autoConnect:false,
+    // }));
     const RTCConnection = useRef();
     const [connectionState, setConnectionState] = useState("new");
     const [signalingState , setSignallingState]  = useState("");
@@ -41,7 +41,6 @@ const useRTC = (videoSourceRef) => {
     useEffect(() => {
         const rtcConnection = new RTCPeerConnection(config);
         RTCConnection.current =rtcConnection;
-        Signalling.current.connect();
 
         RTCConnection.current.onconnectionstatechange = (e)=>{
             setConnectionState(rtcConnection.connectionState);
@@ -118,6 +117,7 @@ const useRTC = (videoSourceRef) => {
             return;
             // return;
         }
+        Signalling.current.connect();
         const offer = await RTCConnection.current.createOffer();
         RTCConnection.current.setLocalDescription(offer);
         Signalling.current.emit('sendOffer',{'offer': offer});

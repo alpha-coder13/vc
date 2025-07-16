@@ -35,7 +35,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ RTCConnection, mode, connecti
                 video.stream.then((stream)=>{
                 setStreamState(true);
                 const videoTrack = stream.getVideoTracks()[0]
-
+                console.log("video stream" , stream);
                     if(videoElementRef.current && MediaStreamSent.current){
                         videoElementRef.current.srcObject = stream;
                         videoElementRef.current.play().catch(console.error);
