@@ -5,10 +5,10 @@ import { io } from "socket.io-client";
 const useRTC = (videoSourceRef) => {
     const config = {
         "iceServers": [
-            // {
-            //     "urls": "stun:stun.l.google.com:19302"
-            // }
-            // ,
+            {
+                "urls": "stun:stun.l.google.com:19302"
+            }
+            ,
             {
                 "username": "1751897080209:kraT0s",
                 "credential": "3eaWHipwNR2UDW1ipGvUvcvQL4Y=",
