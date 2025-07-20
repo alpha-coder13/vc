@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { ChangeEvent, useCallback, useEffect, useState } from 'react';
 import VideoPlayer from './VideoElement/component/VideoPlayer';
 import ChatBox from './ChatBox';
 import useRTC from './RTC/hooks';
 import AudioComponent from './AudioElement/components/AudioComponent';
+import '../css/mainLayout.css';
 
 interface MainLayoutProps {
   onLogout: () => void;
@@ -13,17 +14,71 @@ interface MainLayoutProps {
 
 // --- Style Notes ---
 // These classes would be defined in your CSS file to match the dark theme.
-// .pre-join-container { display: flex; flex-direction: column; ... }
-// .device-controls button { background: #4A5568; ... }
-// .join-button { background: #3B82F6; ... }
-// .settings-link { color: #9CA3AF; ... }
+// 
 
-const JoinLobby = ({ onJoin }) => {
+const JoinLobby = ({ onJoin, RoomAPI }) => {
+  const [joinState, setJoinState] =  useState<number>(1);
+  const [roomID, setRoomID] =  useState<string>("");
+  // Join States :
+  // 1 : native state 
+  // 2 : Input State
+  const createRoom = useCallback(()=>{
+      if(RoomAPI.current){
+          fetch(RoomAPI.current,{
+            headers:{
+              'Content-type':'application/json',
+            },
+            mode:'cors',
+            method:'GET'
+          }).then((data)=>{
+            if(!data.ok)return;
+            return data.json();
+          }).then((data)=>{
+            if(data.data.room_id){
+              setRoomID(data.data.room_id);
+            }else{
+              // handle Error
+            }
+          }).catch((err) => {
+            // handle Error
+          })
+
+          setJoinState(3);
+      }
+  },[RoomAPI.current])
+
+  const joinRoom = ()=>{
+    setJoinState(2);
+  }
+  const handleRoomInput = (e : ChangeEvent<HTMLInputElement>) => {
+     setRoomID(prev => e.target.value);
+  }
+  const handleJoin = (e :MouseEvent)=>{
+      onJoin(roomID);
+  }
   return (
-    <div className="pre-join-container">
-      <button className="join-button" onClick={onJoin}>
-        Join Now
-      </button>
+   <div className="flex h-full  border-slate-700 shadow-lg justify-center items-center">
+      {
+        joinState == 1 ? (
+          <>
+          <button className="rounded-lg border h-20 mx-2  join-button  flex-1" onClick={joinRoom}>
+            Join Room
+          </button>
+          <button className="rounded-lg border h-20 mx-2 join-button flex-1" onClick={createRoom}>
+            Create Room
+          </button>
+          </>
+        ):
+        (
+          <>
+          <input className={`rounded-lg border h-20 mx-2 bg-slate-800 flex-1 px-3 ${joinState==3 && "select-all caret-transparent"}`} placeholder='RoomID' value={roomID} onChange={handleRoomInput} disabled={joinState ==3 ? true : false}>
+          </input>
+          <button className="rounded-lg border h-20 mx-2 join-button flex-1" onClick={handleJoin}>
+            Join
+          </button>
+          </>
+        )
+      }
     </div>
   );
 };
@@ -32,7 +87,7 @@ const JoinLobby = ({ onJoin }) => {
 const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
 
 
-  const {makeCall, hangup, connectionState,RTCConnection,MediaStreamSent} = useRTC();
+  const {makeCall, hangup, connectionState,RTCConnection,MediaStreamSent ,Signalling, RoomAPI} = useRTC();
   return (
     <div className="flex flex-col h-screen bg-slate-900">
       <header className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 shadow-md">
@@ -51,9 +106,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
             <AudioComponent RTCPeerConnection={RTCConnection} MediaStreamSent={MediaStreamSent}/>
           </VideoPlayer>
         </div>
-        <div className="lg:col-span-1 flex flex-col h-full">
-          {connectionState == 'connected' && <ChatBox />}
-          {connectionState !== 'connected' && <JoinLobby onJoin={makeCall}/>}
+        <div className="lg:col-span-1 flex flex-col h-full ">
+          {connectionState == 'connected' && <ChatBox Signalling={Signalling} />}
+           {/* <ChatBox /> */}
+          {connectionState !== 'connected' && <JoinLobby onJoin={makeCall} RoomAPI={RoomAPI}/>}
         </div> 
       </main>
     </div>

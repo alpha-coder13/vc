@@ -14,23 +14,28 @@ const useRTC = (videoSourceRef) => {
                 "credential": "3eaWHipwNR2UDW1ipGvUvcvQL4Y=",
                 "urls": [
                     "turn:128.199.26.238:10000?transport=tcp",
-                    "turn:128.199.26.238:10001?transport=udp"
+                    "turn:128.199.26.238:11000?transport=udp"
                 ]
-            }
+            },
         ]
     }
-    const Signalling = useRef(io("wss://vc-service.onrender.com/",{
-        autoConnect:false,
-    }));
-    // const Signalling = useRef(io("ws://localhost:3001/",{
+    // const Signalling = useRef(io("wss://vc-service.onrender.com/",{
     //     autoConnect:false,
     // }));
+    // const RoomAPI =  useRef('https://vc-service.onrender.com/createRoom')
+    const Signalling = useRef(io("ws://localhost:3001/",{
+        autoConnect:false,
+    }));
+    const RoomAPI =  useRef('http://localhost:3001/createRoom')
+
     const RTCConnection = useRef();
     const [connectionState, setConnectionState] = useState("new");
     const [signalingState , setSignallingState]  = useState("");
-
+    const [error, setError] = useState({
+        message: "",
+        showErrorClassname:"d-none",
+    })
     const MediaStreamSent = useRef(new MediaStream());
-
     useEffect(()=>{
 
         if(Signalling.current && connectionState == 'disconnected' ){
@@ -54,7 +59,7 @@ const useRTC = (videoSourceRef) => {
 
         RTCConnection.current.onicecandidate = (event) => {
             if(event.candidate){
-                // console.log(event);
+                console.log(event);
                 Signalling.current.emit('iceCandidate', event.candidate)
             }
         } 
@@ -99,6 +104,14 @@ const useRTC = (videoSourceRef) => {
         }) 
         
         
+        Signalling.current.on('error',async(data)=>{
+            console.log(data);
+              setError({
+                message : data.message,
+                showErrorClassname:1
+              })
+        })
+
         return ()=>{
             RTCConnection.current?.close();
             Signalling.current?.disconnect();
@@ -106,21 +119,24 @@ const useRTC = (videoSourceRef) => {
 
     }, [])
 
-    async function makeCall(){
+    async function makeCall(RoomID){
         if(!RTCConnection.current || !Signalling.current){
-            console.log("not established yet");
+            console.log("not initialized yet");
             return ;
         }
 
-        if(RTCConnection.current.signalingState !== 'stable'){
-            console.log('Cannot create offer in current state:', RTCConnection.current.signalingState,'restarting');
-            return;
-            // return;
-        }
-        Signalling.current.connect();
-        const offer = await RTCConnection.current.createOffer();
-        RTCConnection.current.setLocalDescription(offer);
-        Signalling.current.emit('sendOffer',{'offer': offer});
+        if(RoomID){
+            Signalling.current.connect();
+            Signalling.current.emit('joinRoom',{RoomID});
+            if(RTCConnection.current.signalingState !== 'stable'){
+                console.log('Cannot create offer in current state:', RTCConnection.current.signalingState);
+                return;
+            }
+            const offer = await RTCConnection.current.createOffer();
+            RTCConnection.current.setLocalDescription(offer);
+            Signalling.current.emit('sendOffer',{'offer': offer});
+        }   
+        
     }
 
     const hangup = () => {
@@ -130,7 +146,7 @@ const useRTC = (videoSourceRef) => {
 
     };
 
-    return {makeCall, hangup, connectionState, RTCConnection, MediaStreamSent}
+    return {makeCall, hangup, connectionState, RTCConnection, MediaStreamSent, Signalling,error, RoomAPI}
 }
 
 

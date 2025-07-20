@@ -1,16 +1,16 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage } from './types';
 import SendIcon from './icons/SendIcon';
 
-const initialMessages: ChatMessage[] = [
-  { id: 1, text: "Hey everyone, welcome to the call!", sender: 'participant', timestamp: "10:30 AM" },
-  { id: 2, text: "Hi there! Glad to be here.", sender: 'user', timestamp: "10:31 AM" },
-  { id: 3, text: "Let's get started in a few minutes.", sender: 'participant', timestamp: "10:31 AM" },
-];
+// const initialMessages: ChatMessage[] = [
+//   { id: 1, text: "Hey everyone, welcome to the call!", sender: 'participant', timestamp: "10:30 AM" },
+//   { id: 2, text: "Hi there! Glad to be here.", sender: 'user', timestamp: "10:31 AM" },
+//   { id: 3, text: "Let's get started in a few minutes.", sender: 'participant', timestamp: "10:31 AM" },
+// ];
 
-const ChatBox: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+const ChatBox: React.FC = ({Signalling}) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -22,31 +22,38 @@ const ChatBox: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (newMessage.trim() === '') return;
+  useEffect(()=>{
+    if(Signalling.current){
+        console.log('triggered out');
 
-    const userMessage: ChatMessage = {
-      id: messages.length + 1,
-      text: newMessage,
-      sender: 'user',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+      Signalling.current.on('incoming',(data)=>{
+        console.log('triggered');
+        const text = data.message;
+        const id = messages.length+1;
+        const sender = 'participant';
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        setMessages((prev)=> ([...prev,{text,id,sender,timestamp}]));
+      })
+    }
+  },[])
+  
 
-    setMessages(prevMessages => [...prevMessages, userMessage]);
-    setNewMessage('');
-    
-    // Simulate a reply from the other participant
-    setTimeout(() => {
-        const botMessage: ChatMessage = {
-            id: messages.length + 2,
-            text: "That's a great point!",
-            sender: 'participant',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setMessages(prevMessages => [...prevMessages, botMessage]);
-    }, 1000);
-  };
+  const handleSendMessage = useCallback((e: React.FormEvent<HTMLFormElement>)=>{
+        e.preventDefault();
+      if (newMessage.trim() === '') return;
+      if(Signalling.current){
+        const text = newMessage;
+        const id = messages.length+1;
+        const sender = 'user';
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        setMessages((prev)=> ([...prev,{text,id,sender,timestamp}]));
+        console.log('here');
+        Signalling.current.emit('chatMessage',newMessage);
+        
+        setNewMessage('');
+      } 
+  },[Signalling.current,newMessage,messages])
+
 
   return (
     <div className="flex flex-col h-full bg-slate-800 rounded-lg border border-slate-700 shadow-lg">

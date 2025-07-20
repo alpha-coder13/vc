@@ -1,0 +1,4 @@
+.pre-join-container { display: flex; flex-direction: column;}
+ .device-controls button { background: #4A5568; }
+ .join-button { background: #3B82F6;}
+ .settings-link { color: #9CA3AF;}
