@@ -131,7 +131,7 @@ server.on('request', (req,res)=>{
     if(parsedURL.pathname.startsWith('/socket.io/')){
         return ;
     }
-    res.setHeader('Access-Control-Allow-Origin','*');
+    res.setHeader('Access-Control-Allow-Origin','https://vc-frontend-asfd.onrender.com');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
     res.setHeader('Access-Control-Allow-Headers', 'Content-type');
     res.writeHead(200,{
