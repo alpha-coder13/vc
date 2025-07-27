@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: (param : Object) => void;
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
@@ -13,7 +13,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     e.preventDefault();
     // Basic validation for demonstration purposes
     if (email && password) {
-      onLogin();
+      onLogin({
+        username : email,
+        password,
+      });
     } else {
       alert('Please enter both email and password.');
     }

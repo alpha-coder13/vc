@@ -22,11 +22,7 @@ const useRTC = (videoSourceRef) => {
     const Signalling = useRef(io("wss://vc-service.onrender.com/",{
         autoConnect:false,
     }));
-    const RoomAPI =  useRef('https://vc-service.onrender.com/createRoom')
-    // const Signalling = useRef(io("ws://localhost:3001/",{
-    //     autoConnect:false,
-    // }));
-    // const RoomAPI =  useRef('http://localhost:3001/createRoom')
+
 
     const RTCConnection = useRef();
     const [connectionState, setConnectionState] = useState("new");
@@ -146,7 +142,7 @@ const useRTC = (videoSourceRef) => {
 
     };
 
-    return {makeCall, hangup, connectionState, RTCConnection, MediaStreamSent, Signalling,error, RoomAPI}
+    return {makeCall, hangup, connectionState, RTCConnection, MediaStreamSent, Signalling,error}
 }
 
 

@@ -1,14 +1,13 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import LoginScreen from './components/LoginScreen';
 import MainLayout from './components/MainLayout';
+import {authenticateUser, checkUserAccess} from './utilities/utilities';
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const handleLogin = useCallback(() => {
-    // In a real app, you would perform JWT validation here.
-    // For this mock, we'll just set isAuthenticated to true.
+  const handleLoggedin = useCallback(() => {
     setIsAuthenticated(true);
   }, []);
 
@@ -16,6 +15,16 @@ const App: React.FC = () => {
     setIsAuthenticated(false);
   }, []);
 
+  const handleLogin = useCallback((params :Object)=>{
+    authenticateUser({handleSuccess:handleLoggedin,
+      handleFailure:handleLogout,
+      parameters:params
+    })
+  },[])
+
+  useEffect(()=>{
+    checkUserAccess({handleSuccess:handleLoggedin, handleFailure:handleLogout})
+  },[])
   return (
     <div className="bg-slate-900 text-gray-200 min-h-screen w-full">
       {isAuthenticated ? (

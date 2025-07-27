@@ -5,6 +5,7 @@ import ChatBox from './ChatBox';
 import useRTC from './RTC/hooks';
 import AudioComponent from './AudioElement/components/AudioComponent';
 import '../css/mainLayout.css';
+import { createUserRoom } from '../utilities/utilities';
 
 interface MainLayoutProps {
   onLogout: () => void;
@@ -16,36 +17,16 @@ interface MainLayoutProps {
 // These classes would be defined in your CSS file to match the dark theme.
 // 
 
-const JoinLobby = ({ onJoin, RoomAPI }) => {
+const JoinLobby = ({ onJoin}) => {
   const [joinState, setJoinState] =  useState<number>(1);
   const [roomID, setRoomID] =  useState<string>("");
   // Join States :
   // 1 : native state 
   // 2 : Input State
   const createRoom = useCallback(()=>{
-      if(RoomAPI.current){
-          fetch(RoomAPI.current,{
-            headers:{
-              'Content-type':'application/json',
-            },
-            mode:'cors',
-            method:'GET'
-          }).then((data)=>{
-            if(!data.ok)return;
-            return data.json();
-          }).then((data)=>{
-            if(data.data.room_id){
-              setRoomID(data.data.room_id);
-            }else{
-              // handle Error
-            }
-          }).catch((err) => {
-            // handle Error
-          })
-
-          setJoinState(3);
-      }
-  },[RoomAPI.current])
+      createUserRoom({handleSuccess:setRoomID, handleFailure:()=>{}})
+      setJoinState(3);
+  },[])
 
   const joinRoom = ()=>{
     setJoinState(2);
@@ -87,7 +68,7 @@ const JoinLobby = ({ onJoin, RoomAPI }) => {
 const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
 
 
-  const {makeCall, hangup, connectionState,RTCConnection,MediaStreamSent ,Signalling, RoomAPI} = useRTC();
+  const {makeCall, hangup, connectionState,RTCConnection,MediaStreamSent ,Signalling} = useRTC();
   return (
     <div className="flex flex-col h-screen bg-slate-900">
       <header className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 shadow-md">
@@ -109,7 +90,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ onLogout }) => {
         <div className="lg:col-span-1 flex flex-col h-full ">
           {connectionState == 'connected' && <ChatBox Signalling={Signalling} />}
            {/* <ChatBox /> */}
-          {connectionState !== 'connected' && <JoinLobby onJoin={makeCall} RoomAPI={RoomAPI}/>}
+          {connectionState !== 'connected' && <JoinLobby onJoin={makeCall} />}
         </div> 
       </main>
     </div>
