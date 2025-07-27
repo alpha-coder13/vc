@@ -1,6 +1,7 @@
 const http = require('http');
 const path = require('path');
 const server = http.createServer();
+const crypto = require('crypto');
 
 require('dotenv').config(path.resolve(process.cwd(),'.env'));
 const {randomUUID} =require('crypto');
@@ -20,6 +21,66 @@ function createRoom(){
     return randomUUID();
 }
 
+
+class User{
+    #secureKey;
+    #identifierKey;
+    constructor(username, password){
+        this.#identifierKey = crypto.createHmac('SHA256',`${username}-${password}`).digest('base64');
+        this.#secureKey = this.#identifierKey.slice(0,5)+'-vc-backend-user';
+    }
+
+    getUser(){
+        return {
+            id : this.#identifierKey,
+            key :this.#secureKey
+        }
+    }
+    
+}
+
+class VCBackendUserDB{
+    static #dbUrl = process.env.USER_DB_URL;
+    static #dbUsername = process.env.USER_DB_USERNAME;
+    static #dbUserPass = process.env.USER_DB_PASSWORD;
+    static #dbconnection = undefined;
+    static async initializeDBConnection(){
+        // connect to DB , assign the same ot db connection;
+    }
+    static async userGet(username, password){
+        const userObj = new User(username, password);
+        const {id} = userObj;
+        return  new Promise((resolve, reject)=>{
+            if(VCBackendUserDB.#dbconnection == undefined){
+                reject("db not initialized yet");
+            }
+
+            // VCBackendUserDB.#dbconnection // methds declaration
+        })
+        // fetch a uer from the DB
+    }
+    static async  userSet(username, password){
+        // add a user 
+        const userObj = new User(username, password);
+        return  new Promise((resolve, reject)=>{
+            if(VCBackendUserDB.#dbconnection == undefined){
+                reject("db not initialized yet");
+            }
+
+            // VCBackendUserDB.#dbconnection // methds declaration
+        })
+
+    }
+    static async closeDBConnetion(){
+        return  new Promise((resolve, reject)=>{
+            if(VCBackendUserDB.#dbconnection == undefined){
+                resolve("db not initialized yet hence not closed");
+            }
+
+            // VCBackendUserDB.#dbconnection // methds declaration
+        })
+    }
+}
 
 
 function handleSocket(socket){
@@ -132,8 +193,8 @@ server.on('request', (req,res)=>{
         return ;
     }
     res.setHeader('Access-Control-Allow-Origin','https://vc-frontend-asfd.onrender.com');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-type, Authorization');
     res.writeHead(200,{
         'Content-Type' : 'application/json',
     })
@@ -173,6 +234,30 @@ server.on('request', (req,res)=>{
     }
 })
 
+
+function handleAuthMiddleware(req, res){
+    var cookieObj = cookieParsertoObj(req.headers.Authorization);
+    // console.log(cookieObj);
+    var cookieStr =  cookieParsertoStr(cookieObj);
+    // console.log(cookieStr);
+    return true
+}
+
+function cookieParsertoObj(cookieStr){
+    const cookieArray= cookieStr.split(';').map((val)=>val.trim());
+    const cookieObj = {};
+    for(let a  of cookieArray){
+        let [name , value] = a.split("=");
+        cookieObj[name] = value;
+    }
+    return cookieObj;
+}
+
+
+function cookieParsertoStr(cookieObj){
+    let cookieStr = Object.keys(cookieObj).reduce((prev,val)=>{return prev+= val+'='+cookieObj[val]+'; '},'')
+    return cookieStr;
+}
 server.listen(process.env.PORT || 3001,()=>{
     // console.log(process.env.PORT)
     console.log('server started');
