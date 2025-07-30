@@ -7,6 +7,8 @@ require('dotenv').config(path.resolve(process.cwd(),'.env'));
 const {randomUUID} =require('crypto');
 const {Server} =  require('socket.io');
 const { parse } = require('url');
+const RequestParser = require('./utils/request-parsers');
+const JWThandlers = require('./utils/jwt-handlers');
 
 const ioServer = new Server(server,{
     cors:{
@@ -20,68 +22,6 @@ const RoomInterVals = new Map();
 function createRoom(){
     return randomUUID();
 }
-
-
-class User{
-    #secureKey;
-    #identifierKey;
-    constructor(username, password){
-        this.#identifierKey = crypto.createHmac('SHA256',`${username}-${password}`).digest('base64');
-        this.#secureKey = this.#identifierKey.slice(0,5)+'-vc-backend-user';
-    }
-
-    getUser(){
-        return {
-            id : this.#identifierKey,
-            key :this.#secureKey
-        }
-    }
-    
-}
-
-class VCBackendUserDB{
-    static #dbUrl = process.env.USER_DB_URL;
-    static #dbUsername = process.env.USER_DB_USERNAME;
-    static #dbUserPass = process.env.USER_DB_PASSWORD;
-    static #dbconnection = undefined;
-    static async initializeDBConnection(){
-        // connect to DB , assign the same ot db connection;
-    }
-    static async userGet(username, password){
-        const userObj = new User(username, password);
-        const {id} = userObj;
-        return  new Promise((resolve, reject)=>{
-            if(VCBackendUserDB.#dbconnection == undefined){
-                reject("db not initialized yet");
-            }
-
-            // VCBackendUserDB.#dbconnection // methds declaration
-        })
-        // fetch a uer from the DB
-    }
-    static async  userSet(username, password){
-        // add a user 
-        const userObj = new User(username, password);
-        return  new Promise((resolve, reject)=>{
-            if(VCBackendUserDB.#dbconnection == undefined){
-                reject("db not initialized yet");
-            }
-
-            // VCBackendUserDB.#dbconnection // methds declaration
-        })
-
-    }
-    static async closeDBConnetion(){
-        return  new Promise((resolve, reject)=>{
-            if(VCBackendUserDB.#dbconnection == undefined){
-                resolve("db not initialized yet hence not closed");
-            }
-
-            // VCBackendUserDB.#dbconnection // methds declaration
-        })
-    }
-}
-
 
 function handleSocket(socket){
     // const peerList = io
@@ -235,30 +175,33 @@ server.on('request', (req,res)=>{
 })
 
 
-function handleAuthMiddleware(req, res){
-    var cookieObj = cookieParsertoObj(req.headers.Authorization);
+function handleAuthMiddleware(req){
+    var cookieObj = RequestParser.cookieParsertoObj(req.headers.cookie);
     // console.log(cookieObj);
-    var cookieStr =  cookieParsertoStr(cookieObj);
+
+    var JWT =  cookieObj['vc_iss'];
+
+    if(JWT == '' || JWT== undefined){
+        // handle the error , returna  response header with redload rule
+    }else{
+        JWThandlers.isValidJWT(JWT) // will return a promise
+    }
+    var cookieStr =  RequestParser.cookieParsertoStr(cookieObj);
     // console.log(cookieStr);
     return true
 }
 
-function cookieParsertoObj(cookieStr){
-    const cookieArray= cookieStr.split(';').map((val)=>val.trim());
-    const cookieObj = {};
-    for(let a  of cookieArray){
-        let [name , value] = a.split("=");
-        cookieObj[name] = value;
-    }
-    return cookieObj;
-}
 
-
-function cookieParsertoStr(cookieObj){
-    let cookieStr = Object.keys(cookieObj).reduce((prev,val)=>{return prev+= val+'='+cookieObj[val]+'; '},'')
-    return cookieStr;
-}
 server.listen(process.env.PORT || 3001,()=>{
     // console.log(process.env.PORT)
     console.log('server started');
 })
+
+
+
+// next time you open :
+/**
+ * 
+ * add user creation when logging in ---> DB access ----> DB instanciate -----> user create ------> return JWT
+ * add JWT authentication ----> validate JWT ----> if valid allow user to continue --- >invalid throw back to login page
+ */
