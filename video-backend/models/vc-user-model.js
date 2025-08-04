@@ -62,4 +62,4 @@ UserDetails.init({
     createdAt:false,
 })
 
-module.exports = UserLogin
+module.exports = { UserLogin, UserDetails}
