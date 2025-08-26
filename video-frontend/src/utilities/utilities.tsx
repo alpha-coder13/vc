@@ -1,6 +1,6 @@
 
-// const url = "vc-service.onrender.com";
-const url = "localhost:3001";
+const url = "vc-service.onrender.com";
+// const url = "localhost:3001";
 
 interface userAccessParameters{
     handleSuccess : (param:String|undefined) => void,
