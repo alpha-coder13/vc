@@ -40,7 +40,7 @@ const AudioComponent:React.FC<AudioPlayerProps> = ({RTCPeerConnection , MediaStr
 
 
   return (
-    <div className="flex items-center justify-center  fixed z-10 bottom-1 left-2/5 ">
+    <div className="flex items-center justify-center  fixed z-10 bottom-1 -translate-x-20">
       <div className="text-center">
         <button
           onClick={toggleMute}
