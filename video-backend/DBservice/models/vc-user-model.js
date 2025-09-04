@@ -42,7 +42,7 @@ class UserDetails extends Model{};
 UserDetails.init({
         id:{
             type:DataTypes.INTEGER,
-            allowNull:false,
+            // allowNull:false,
             autoIncrement:true,
             primaryKey:true,
         },
@@ -62,6 +62,12 @@ UserDetails.init({
         },
         userid:{
             type:DataTypes.INTEGER,
+             references: {
+                model: 'vc_user_login', // The table name
+                key: 'id',
+            },
+                onUpdate:'CASCADE',
+                onDelete:'CASCADE',
         },
         idenMode:{
             type:DataTypes.CHAR(2),
@@ -80,15 +86,15 @@ UserDetails.init({
 // UserLogin.sync({alter:true});
 // UserDetails.sync({alter:true});
 
-UserLogin.hasOne(UserDetails,{
-    onUpdate:'CASCADE',
-    onDelete:'CASCADE',
-    foreignKey:{
-        name:'userid',
-    }
-})
+// UserLogin.hasOne(UserDetails,{
+//     onUpdate:'CASCADE',
+//     onDelete:'CASCADE',
+//     foreignKey:{
+//         name:'userid',
+//     }
+// })
 
-UserDetails.belongsTo(UserLogin);
+// UserDetails.belongsTo(UserLogin);
 
 
 
@@ -99,7 +105,7 @@ async function getUser(userIdentifier, mode){ // mode = LOOKUPLOGIN | LOOKUPDATA
 
   try{
     const userIdArray = await UserDetails.findAll({
-            attributes:["userid","first_name","last_name"],
+            attributes:["userid","first_name","last_name","idenMode","email","mobile"],
             where:{
                 [Op.or]:[{email:userIdentifier},{mobile:userIdentifier}] // Op is a set of operators provided by sequelize 
             }
@@ -111,7 +117,7 @@ async function getUser(userIdentifier, mode){ // mode = LOOKUPLOGIN | LOOKUPDATA
         const foundUser = userIdArray[0];
 
         if(mode == "LOOKUPDATA"){
-            return {status : 'success', message :'user data found', data: {...userIdArray[0].dataValues} }
+            return {status : 'success', message :'user data found', data: [{...userIdArray[0].dataValues}] }
         }
 
 
@@ -141,9 +147,9 @@ async function createUser({username , userpass}) {
         if(userPresent.data !== "") throw new Error ('user creation failure, the user already exsists');
         const secretKey = createHash('SHA256').update(username).update(process.env.MYSQL_USERSECRET_SALT).digest('base64')
         const passstring = createHash('SHA256').update(`${username}-${userpass}`).update(process.env.MYSQL_USERPASS_SALT).digest('base64')
-        const createUser = await UserLogin.save({
+        const createUser =await  UserLogin.create({
             'username':username,
-            'passstring':passstrings,
+            'passstring':passstring,
             'secret_key':secretKey,
         })
         
@@ -184,9 +190,9 @@ async function createUser({username , userpass}) {
 
 
 async function loginUser({username , userpass}){
-    const passstring =createHash('SHA256').update(`${username}-${userpass}`).update(process.env.MYSQL_USERPASS_SALT).digest('base64');
+    let passstring =createHash('SHA256').update(`${username}-${userpass}`).update(process.env.MYSQL_USERPASS_SALT).digest('base64');
 
-    const userSecretKey = await UserLogin.findAll({
+    var userSecretKey = await UserLogin.findAll({
         attributes:[secretKey, id],
         where:{
             [Op.and] : [{username},{passstring}]
@@ -195,21 +201,43 @@ async function loginUser({username , userpass}){
 
     if(userSecretKey.length  == 0 ){
         // run the query to fetch the primary mode of identification and return the data to the user
-    }else{
-        const secret_key = userSecretKey[0].getDataValue('secret_key');
-        const id = userSecretKey[0].getDataValue('id');
-        const PayloadForValidJWT = {
-            'user-id':id,
-            'dataString':"here goes encrypted data string" // {passstring + username seperated by a '|' passed through a stream cipher , probably will be using RC4}
+        try{
+            
+            const userData =  await getUser(username,"LOOKUPDATA")
+
+            
+            if(userData.data.length == 0){
+                // throw not found error
+            }else{
+                username = userData.data[0].getDataValue('idenMode') ==  'EM' ? userData.data[0].getDataValue('email') : userData.data[0].getDataValue('mobile');
+                passstring =createHash('SHA256').update(`${username}-${userpass}`).update(process.env.MYSQL_USERPASS_SALT).digest('base64');
+                userSecretKey = await UserLogin.findAll({
+                        attributes:[secretKey, id],
+                        where:{
+                            [Op.and] : [{username},{passstring}]
+                        }
+                    })
+            }
+        }catch(err){
+             // error in fetching
         }
 
-        return {status:'success', message:'userLoginsuccess', data :{JWTpayload : PayloadForValidJWT}}
+
     }
+
+    const secret_key = userSecretKey[0].getDataValue('secret_key');
+    const id = userSecretKey[0].getDataValue('id');
+    const PayloadForValidJWT = {
+        'user-id':id,
+        'dataString':"here goes encrypted data string" // {passstring + username seperated by a '|' passed through a stream cipher , probably will be using RC4}
+    }
+
+    return {status:'success', message:'userLoginsuccess', data :{JWTpayload : PayloadForValidJWT}}
 }
 
 // getUser('amardeepsaha13@gmail.com','LOOKUPDATA').then(console.log)
 
-// createUser({username:'amardeepsaha13@gmail.vom', password:'AmardeepSaha1234'}).then(console.log).catch(console.error);
+createUser({username:'amardeepsaha13@gmail.vom', password:'AmardeepSaha1234'}).then(console.log).catch(console.error);
 
 
 

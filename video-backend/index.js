@@ -1,23 +1,26 @@
 const http = require('http');
 const path = require('path');
 const server = http.createServer();
-const crypto = require('crypto');
 
 require('dotenv').config(path.resolve(process.cwd(),'.env'));
 const {randomUUID} =require('crypto');
 const {Server} =  require('socket.io');
 const { parse } = require('url');
-const RequestParser = require('./utils/request-parsers');
-const JWThandlers = require('./utils/jwt-handlers');
+
 
 const ioServer = new Server(server,{
     cors:{
-         origin: "*"
+        //  origin: "https://vc-frontend-asfd.onrender.com/"
+        origin:"*"
     }
 });
-const RoomSet = new Map();
-const ioArray = new Map();
-const RoomInterVals = new Map();
+
+
+const RoomSet = new Map(); // roomID -> set of sockets
+
+const ioArray = new Map(); // socket id -> room ID
+
+const RoomInterVals = new Map();  // in cache we will be removing the dependency of maps and will be employing eviction algorithm (TTL) in redis for room id;
 
 function createRoom(){
     return randomUUID();
@@ -115,7 +118,7 @@ function expireRoom(RoomID){
         RoomSet.delete(RoomID);
         RoomInterVals.delete(RoomID);
     }, (20*60*1000));
-    RoomInterVals.set(RoomID,deleteRoom);
+    RoomInterVals.set(RoomID,deleteRoom); // this will be handled by redis itself;
 }
 
 ioServer.on("connection",(socket)=>{
@@ -175,21 +178,6 @@ server.on('request', (req,res)=>{
 })
 
 
-function handleAuthMiddleware(req){
-    var cookieObj = RequestParser.cookieParsertoObj(req.headers.cookie);
-    // console.log(cookieObj);
-
-    var JWT =  cookieObj['vc_iss'];
-
-    if(JWT == '' || JWT== undefined){
-        // handle the error , returna  response header with redload rule
-    }else{
-        JWThandlers.isValidJWT(JWT) // will return a promise
-    }
-    var cookieStr =  RequestParser.cookieParsertoStr(cookieObj);
-    // console.log(cookieStr);
-    return true
-}
 
 
 server.listen(process.env.PORT || 3001,()=>{
@@ -199,9 +187,26 @@ server.listen(process.env.PORT || 3001,()=>{
 
 
 
-// next time you open :
-/**
- * 
- * add user creation when logging in ---> DB access ----> DB instanciate -----> user create ------> return JWT
- * add JWT authentication ----> validate JWT ----> if valid allow user to continue --- >invalid throw back to login page
- */
+
+// create a redis instance:
+// 3 tables : map(string -> set), map(string -> string), array(string)
+
+// redis instanciate :
+// redis connection close:
+// TTL for table 3: -> event listen (Remove from table map(string->set)); 
+
+
+
+/// okay so after a deeper thought : 
+// I cannot store the connections objects in redis
+// the messaging is to be handled using redis pub sub
+// lets see how 
+ // user A connects  : creates a room (room entry made to redis || made to be persistent)
+ // user B connects  : joins room A has provided 
+ // redis  room : id   has user_A_socketID and user_B_socketID
+ // to create a 2 way rable  
+ // we will also store user:id room_id
+ //
+// now design for messaging : redis pub sub to be studied (core idea : on message , the message is published in the room channel and all the sockets will get the message)
+// now on a socket exit : 1. remove the user from the room : if the room still has people : just del the user:id 
+//                        2. if the room has no people :  set  a expiy time for the room:id

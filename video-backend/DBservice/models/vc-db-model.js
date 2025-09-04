@@ -12,12 +12,14 @@ class VCBackendUserDB{
         const {Sequelize} = require('sequelize');
         const path =require('path');
         require('dotenv').config(path.resolve(process.cwd(),'.env'));
+
+
         VCBackendUserDB.dbconnection = new Sequelize(process.env.MYSQL_DATABASE,
             process.env.MYSQL_USER,
             process.env.MYSQL_PASSWORD,
             {
-            host:process.env.MYSQL_HOSTNAME,
-            dialect:'mysql',
+                host:process.env.MYSQL_HOSTNAME,
+                dialect:'mysql',
             }
         ) 
         try{
@@ -25,7 +27,7 @@ class VCBackendUserDB{
            return {messaging :'', connectionStatus : '200db', status : 'success'};
         }catch(err){
             VCBackendUserDB.dbconnection = undefined;
-            return {messaging : err.message, connectionStatus : '500db', status : 'failure'};
+            return {messaging : err.message, stack : err.stack ,connectionStatus : '500db', status : 'failure'};
         }
             
     }
