@@ -6,6 +6,7 @@ require('dotenv').config(path.resolve(process.cwd(),'.env'));
 const {randomUUID} =require('crypto');
 const {Server} =  require('socket.io');
 const { parse } = require('url');
+const { stdin } = require('process');
 
 
 const ioServer = new Server(server,{
@@ -22,9 +23,18 @@ const ioArray = new Map(); // socket id -> room ID
 
 const RoomInterVals = new Map();  // in cache we will be removing the dependency of maps and will be employing eviction algorithm (TTL) in redis for room id;
 
+/** 
 function createRoom(){
-    return randomUUID();
+    // get room count from redis : 
+    // send the room count , increment the same by the code.
+    // return  the room count 
+    // return randomUUID();
+    let roomCount ;
+    return roomCount;
 }
+
+commenting the above as to test new redis createRooms
+*/
 
 function handleSocket(socket){
     // const peerList = io
@@ -129,7 +139,7 @@ ioServer.on("connection",(socket)=>{
 
 
 
-server.on('request', (req,res)=>{
+server.on('request', async (req,res)=>{
 
     const parsedURL = parse(req.url,true);
     if(parsedURL.pathname.startsWith('/socket.io/')){
@@ -144,19 +154,24 @@ server.on('request', (req,res)=>{
 
     if(req.url.includes('createRoom') && req.method.toUpperCase() === 'GET'){
 
-        if(RoomSet.size == 20){
-            res.end(JSON.stringify({
-                'code' :'200',
-                'status' : 'Rooms full, Try after sometime, ETA : 10mins',
-                'data' : {
-                    'room_id' : '',
-                }
-            }))
-            return;
-        }
-        const roomData = createRoom();
-        RoomSet.set(roomData, new Set());
-        expireRoom(roomData);
+        // if(RoomSet.size == 20){
+            // res.end(JSON.stringify({
+            //     'code' :'200',
+            //     'status' : 'Rooms full, Try after sometime, ETA : 10mins',
+            //     'data' : {
+            //         'room_id' : '',
+            //     }
+            // })) 
+            // return;
+        // }
+
+        //  removinf room creation limitation code
+        const roomData = await createRoom();
+        //  RoomSet.set(roomData, new Set());
+        // |
+
+        // -> redis code to create a room key
+        // expireRoom(roomData); // this logic will be handled by the the listener on key removal (user)
 
         res.end(JSON.stringify({
             'code' :'200',
@@ -209,4 +224,122 @@ server.listen(process.env.PORT || 3001,()=>{
  //
 // now design for messaging : redis pub sub to be studied (core idea : on message , the message is published in the room channel and all the sockets will get the message)
 // now on a socket exit : 1. remove the user from the room : if the room still has people : just del the user:id 
-//                        2. if the room has no people :  set  a expiy time for the room:id
+//                        2. if the room has no people :  set  a expiy time for the room:id , in which if any users join : set it to persitent (hw to check it's exsitence )just do a get
+
+
+
+// ------------------------------- REDIS OBJECT ---------------------------//
+
+class RedisConnector{
+    static #redisClient;
+    static #connectionStatus; 
+    constructor(){
+        if(RedisConnector.#redisClient == null || RedisConnector.#redisClient == undefined){
+            const {createClient} = require('redis');
+            RedisConnector.#redisClient = createClient({
+                username:process.env.REDIS_USERNAME,
+                password:process.env.REDIS_PASSWORD,
+                socket:{
+                    host:process.env.REDIS_HOSTNAME,
+                    port:process.env.REDIS_PORT,
+                }
+            })
+            if(RedisConnector.#connectionStatus == undefined || RedisConnector.#connectionStatus == false){
+                RedisConnector.#redisClient.connect().then(()=>{
+                    RedisConnector.#connectionStatus = true;
+                }).catch(err => {RedisConnector.#connectionStatus = false, console.error(err)});
+            }
+        }
+         return {client : RedisConnector.#redisClient, status : RedisConnector.#redisClient };
+    }
+}
+
+const {client:CLIENT, status : STATUS} = new RedisConnector();
+
+
+// testing code , works fine
+// (async()=>{
+// await CLIENT.set('foo', 'bar');
+// let result = await CLIENT.get('foo');
+// console.log(result) ;
+// await CLIENT.expire('foo', '10');
+// setTimeout(async()=>{
+// result = await CLIENT.get('foo');
+// console.log(result) ;
+// },11000);
+// })();
+
+// ---------------------------------------------------- REDIS DMFs --------------------------------------------------
+
+
+async function createRoom(){
+    // here we assume the redis client is at cglobal object assigned to CLIENT
+
+    let tempResult = await CLIENT.get('roomNumber');
+    console.log(tempResult);
+    if(tempResult == null){
+        tempResult = 0;
+    }else{
+        tempResult++;
+    }
+    // we can add a round logic for the next available room for a loop of 50000 rooms
+    CLIENT.set('roomNumber' ,tempResult);
+    tempResult = await CLIENT.get('roomNumber');
+    console.log(tempResult);
+    // we are not going to subscribe to a redis channel here || rather we will subscribe on connection
+    return tempResult;
+
+}
+
+
+
+
+/// notes about redis subscription:
+// - dynamically created (if not present)
+// - dies post all subscribers have unsubscribe
+// syntaxt for channel that we use ('roo:id') 
+
+
+// -------------------------------- a lvie process redis command executed for console admin --------------------------
+
+if(process.env.USER == 'admin'){
+    let isAAdmin = false;
+    process.stdin.on('data',async (data)=>{
+    if(data.toString('utf-8').includes('pass')){
+        let passHAndler = data.toString('utf-8').split('=');
+        if(passHAndler.length != 2 ){
+             console.error('The passed argument should be =<password>');
+            return;
+        }
+        let password = passHAndler[passHAndler.length-1].slice(0,-2);
+        const {createHash} = require('crypto');
+        const str = createHash('SHA256').update(password).digest('base64');
+        if(str == process.env.ADMIN_PASS){
+            isAAdmin = true;
+        }else{
+            isAAdmin = false;
+        }
+        return;
+    }
+    if(data.toString('utf-8').includes('reset')){
+        if(!isAAdmin){console.error("not a admin") ; return;}
+        let dataString  = data.toString('utf-8');
+        let commandString = dataString.split('-')[1];
+        if(commandString == undefined || commandString.split('|').length < 2){
+            console.error('The passed argument should be -<command>|<key>|<value>')
+            return;
+        }
+        let commands = [...commandString.split('|')];
+        commands[commands.length-1] = commands[commands.length-1].slice(0,-2);
+        console.log(commands);
+        console.log(await CLIENT.sendCommand([...commands]));
+        return;
+    }
+})
+}
+
+// what did I do today :
+// 1. created a basic redis instance to connect to the redis DB
+// 2. created the code to create Rooms
+// 3. created the code to use a console admin pannel to reset data pointers
+// urayamashi desu /-( @ o @ )_/ 
