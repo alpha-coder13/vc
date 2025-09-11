@@ -228,34 +228,96 @@ server.listen(process.env.PORT || 3001,()=>{
 
 
 
-// ------------------------------- REDIS OBJECT ---------------------------//
+// ------------------------------- REDIS OBJECTS ---------------------------//
 
 class RedisConnector{
-    static #redisClient;
-    static #connectionStatus; 
-    constructor(){
-        if(RedisConnector.#redisClient == null || RedisConnector.#redisClient == undefined){
+    #redisClient;
+    #connectionStatus; 
+    constructor(username=process.env.REDIS_RW_USERNAME , password=process.env.REDIS_RW_PASSWORD, hostname=process.env.REDIS_RW_HOSTNAME, port=process.env.REDIS_RW_PORT){
+        if(this.#redisClient == null || this.#redisClient == undefined){
             const {createClient} = require('redis');
-            RedisConnector.#redisClient = createClient({
-                username:process.env.REDIS_USERNAME,
-                password:process.env.REDIS_PASSWORD,
+            this.#redisClient = createClient({
+                username,
+                password,
                 socket:{
-                    host:process.env.REDIS_HOSTNAME,
-                    port:process.env.REDIS_PORT,
+                    host,
+                    port,
                 }
             })
-            if(RedisConnector.#connectionStatus == undefined || RedisConnector.#connectionStatus == false){
-                RedisConnector.#redisClient.connect().then(()=>{
-                    RedisConnector.#connectionStatus = true;
-                }).catch(err => {RedisConnector.#connectionStatus = false, console.error(err)});
+            if(this.#connectionStatus == undefined || this.#connectionStatus == false){
+                this.#redisClient.connect().then(()=>{
+                    this.#connectionStatus = true;
+                }).catch(err => {this.#connectionStatus = false, console.error(err)});
             }
         }
-         return {client : RedisConnector.#redisClient, status : RedisConnector.#redisClient };
+         return {client : this.#redisClient, status : this.#connectionStatus };
+    }
+}
+
+class UserPool{
+    static #pool;
+    static #connectionCount;
+    constructor(){
+        UserPool.#pool = new Map();
+        UserPool.#connectionCount = 0;
+        return;
+    }
+
+    static getUserID(socketID){
+        if(!UserPool.#pool.has(socketID)){
+            UserPool.#pool.set(socketID,`vc-user:${UserPool.#connectionCount+1}`);
+            UserPool.#connectionCount++;      
+        }
+        return UserPool.#pool.get(socketID);
+    }
+}
+
+class RedisSubscriberPool{
+    static #pool;
+    constructor(){
+        RedisSubscriberPool.#pool = new Map();
+        return;
+    }
+
+    static retievePubSubClient(userID){
+        let PUB_SUB_CL;  
+        if(!RedisSubscriberPool.#pool.has(userID)){
+            PUB_SUB_CL = new RedisConnector(process.env.REDIS_PUBSUB_HOSTNAME,process.env.REDIS_PUBSUB_USERNAME,process.env.REDIS_PUBSUB_PASSWORD,process.env.REDIS_PUBSUB_PORT);
+            RedisSubscriberPool.#pool.set(userID,PUB_SUB_CL);
+        }else{
+            PUB_SUB_CL = RedisSubscriberPool.#pool.get(userID);
+        }
+        return PUB_SUB_CL;
+    }
+
+    static async subscribe(userID,roomID,subscriptionHandler){
+        let PUB_SUB_CL = RedisSubscriberPool.retievePubSubClient(userID);
+        if(PUB_SUB_CL.status != true){
+            console.error("connection not established");
+            return;
+        }
+        await PUB_SUB_CL.client.subscribe(`room:${roomID}`,subscriptionHandler);
+        // handle subscription error
+    }
+
+    static async unsubscribe(userID,roomID){
+        let PUB_SUB_CL = RedisSubscriberPool.getPubSubClient(userID);
+         if(PUB_SUB_CL.status != true){
+            console.error("connection not established");
+            return;
+        }
+
+        await PUB_SUB_CL.client.unsubscribe(`room:${roomID}`);
+        // handle unsubscription error
+    }
+
+    static deletePubSubClient(userID){
+        RedisSubscriberPool.#pool.delete(userID);
     }
 }
 
 const {client:CLIENT, status : STATUS} = new RedisConnector();
-
+new UserPool();// intialize the userPool
 
 // testing code , works fine
 // (async()=>{
@@ -284,13 +346,26 @@ async function createRoom(){
     }
     // we can add a round logic for the next available room for a loop of 50000 rooms
     CLIENT.set('roomNumber' ,tempResult);
-    tempResult = await CLIENT.get('roomNumber');
-    console.log(tempResult);
+    // tempResult = await CLIENT.get('roomNumber');
+    // console.log(tempResult);
     // we are not going to subscribe to a redis channel here || rather we will subscribe on connection
     return tempResult;
 
 }
 
+async function joinRoom(roomID, socketID){
+    let userID = UserPool.getUserID(socketID);
+    let joinResult = await CLIENT.sendCommand(['SADD',`room:${roomID}`,userID]);
+
+    /// here the user subscription is required as well  to be subscribing to the room ID
+
+}
+
+
+async function leaveRoom(roomID , socketID) {
+    let userID = UserPool.getUserID(socketID);
+    // similarly unsubscription command;
+}
 
 
 
@@ -323,6 +398,7 @@ if(process.env.USER == 'admin'){
     }
     if(data.toString('utf-8').includes('reset')){
         if(!isAAdmin){console.error("not a admin") ; return;}
+         isAAdmin = false;
         let dataString  = data.toString('utf-8');
         let commandString = dataString.split('-')[1];
         if(commandString == undefined || commandString.split('|').length < 2){
@@ -342,4 +418,4 @@ if(process.env.USER == 'admin'){
 // 1. created a basic redis instance to connect to the redis DB
 // 2. created the code to create Rooms
 // 3. created the code to use a console admin pannel to reset data pointers
-// urayamashi desu /-( @ o @ )_/ 
+// urayamashii desu /-( @ o @ )_/ 
