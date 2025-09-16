@@ -123,19 +123,21 @@ function handleSocket(socket){
 }
 
 
-function expireRoom(RoomID){
-    const deleteRoom = setTimeout(() => {
-        RoomSet.delete(RoomID);
-        RoomInterVals.delete(RoomID);
-    }, (20*60*1000));
-    RoomInterVals.set(RoomID,deleteRoom); // this will be handled by redis itself;
-}
+// function expireRoom(RoomID){
+//     const deleteRoom = setTimeout(() => {
+//         RoomSet.delete(RoomID);
+//         RoomInterVals.delete(RoomID);
+//     }, (20*60*1000));
+//     RoomInterVals.set(RoomID,deleteRoom); // this will be handled by redis itself;
+// }
 
 ioServer.on("connection",(socket)=>{
     console.log("client connected",socket.id);
     ioArray.set(socket.id,undefined);
     handleSocket(socket);
 })
+
+ioServer.on("disconnect")
 
 
 
@@ -229,7 +231,7 @@ server.listen(process.env.PORT || 3001,()=>{
 
 
 // ------------------------------- REDIS OBJECTS ---------------------------//
-
+const EXPIRE_ROOM_DURATION = 10*60; //seconds
 class RedisConnector{
     #redisClient;
     #connectionStatus; 
@@ -270,6 +272,9 @@ class UserPool{
         }
         return UserPool.#pool.get(socketID);
     }
+    static deleteUserID(socketID){
+        return UserPool.#pool.delete(socketID);
+    }
 }
 
 class RedisSubscriberPool{
@@ -301,7 +306,7 @@ class RedisSubscriberPool{
     }
 
     static async unsubscribe(userID,roomID){
-        let PUB_SUB_CL = RedisSubscriberPool.getPubSubClient(userID);
+        let PUB_SUB_CL = RedisSubscriberPool.retievePubSubClient(userID);
          if(PUB_SUB_CL.status != true){
             console.error("connection not established");
             return;
@@ -312,12 +317,19 @@ class RedisSubscriberPool{
     }
 
     static deletePubSubClient(userID){
-        RedisSubscriberPool.#pool.delete(userID);
+        let PUB_SUB_CL = RedisSubscriberPool.retievePubSubClient(userID);
+        if(PUB_SUB_CL){
+            PUB_SUB_CL.disconnect().then(()=>{
+                RedisSubscriberPool.#pool.delete(userID);
+            }).catch(console.error /*error in closing connection*/);
+        }
     }
 }
 
+new RedisSubscriberPool();
+new UserPool();
+
 const {client:CLIENT, status : STATUS} = new RedisConnector();
-new UserPool();// intialize the userPool
 
 // testing code , works fine
 // (async()=>{
@@ -345,26 +357,49 @@ async function createRoom(){
         tempResult++;
     }
     // we can add a round logic for the next available room for a loop of 50000 rooms
-    CLIENT.set('roomNumber' ,tempResult);
-    // tempResult = await CLIENT.get('roomNumber');
-    // console.log(tempResult);
-    // we are not going to subscribe to a redis channel here || rather we will subscribe on connection
+    CLIENT.set('roomNumber' ,tempResult); // this can cause  race conditions // how can I avoid it ?
     return tempResult;
 
 }
 
 async function joinRoom(roomID, socketID){
     let userID = UserPool.getUserID(socketID);
-    let joinResult = await CLIENT.sendCommand(['SADD',`room:${roomID}`,userID]);
+    let roomJoined = await CLIENT.sendCommand(['SADD',`room:${roomID}`,userID]);
+    await CLIENT.sendCommand(['PERSIST', `room:${roomID}`]);
+    let roomAssigned = await CLIENT.sendCommand(['SET',userID,`room:${roomID}`]);
 
+    await RedisSubscriberPool.subscribe(userID,roomID,()=>{ /** need a subscription handler */}); // this subscription handler should be a event listener
+    /**
+     * ehy   ? if I just add a function it would execute the function, however if I use  eventEmmitter I can pass the message to my socket by listeing to the event emitter and not creating seperate handling functions for each of my sockets
+        but I would definitely require a place to store all my eventListeners 
+    */
+    let userPubSubCL = await RedisSubscriberPool.retievePubSubClient(userID);
+    await userPubSubCL.sendCommand(['PUBLISH',`room:${roomID}`, `${userID} has joined` ]);
     /// here the user subscription is required as well  to be subscribing to the room ID
-
 }
 
 
 async function leaveRoom(roomID , socketID) {
+    
     let userID = UserPool.getUserID(socketID);
+    let roomleft = await CLIENT.sendCommand(['SREM',`room:${roomID}`,userID ]);
+
+    let roomFilledCapacity = await CLIENT.sendCommand(['SCARD', `room:${roomID}`]);
+
+    if(roomFilledCapacity == 0){
+        await CLIENT.sendCommand(['EXPIRE', `room:${roomID}`, EXPIRE_ROOM_DURATION]);
+    }
+
+    let roomUnAssigned = await CLIENT.sendCommand(['DEL',userID]);
+    await userPubSubCL.sendCommand(['PUBLISH',`room:${roomID}`, `${userID} has Left` ]);
+    await RedisSubscriberPool.unsubscribe(userID,roomID);
     // similarly unsubscription command;
+}
+
+
+async function disconnectUser(socketID){
+    UserPool.deleteUserID(socketID);
+    return;
 }
 
 
