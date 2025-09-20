@@ -7,6 +7,7 @@ const {randomUUID} =require('crypto');
 const {Server} =  require('socket.io');
 const { parse } = require('url');
 const { stdin } = require('process');
+const EventEmitter = require('events');
 
 
 const ioServer = new Server(server,{
@@ -255,7 +256,21 @@ class RedisConnector{
          return {client : this.#redisClient, status : this.#connectionStatus };
     }
 }
+// Using Redis Sentinel for high availability and automatic failover is a recommended practice for production systems.[27] // what is redis sentinel
+class PublishEventListener extends EventEmitter{
+    constructor(){
+        super();
+    }
 
+    receive(message){
+        console.log(message);
+        this.emit('receive',message);
+    }
+
+    send(message){
+        this.emit('send', message);
+    }
+}
 class UserPool{
     static #pool;
     static #connectionCount;
@@ -267,7 +282,7 @@ class UserPool{
 
     static getUserID(socketID){
         if(!UserPool.#pool.has(socketID)){
-            UserPool.#pool.set(socketID,`vc-user:${UserPool.#connectionCount+1}`);
+            UserPool.#pool.set(socketID,{userID :`vc-user:${UserPool.#connectionCount+1}`, listener : new PublishEventListener() });
             UserPool.#connectionCount++;      
         }
         return UserPool.#pool.get(socketID);
@@ -277,7 +292,9 @@ class UserPool{
     }
 }
 
+
 class RedisSubscriberPool{
+    // Introduce a connection pool for the RedisSubscriberPool to manage Redis clients more efficiently.
     static #pool;
     constructor(){
         RedisSubscriberPool.#pool = new Map();
@@ -305,6 +322,15 @@ class RedisSubscriberPool{
         // handle subscription error
     }
 
+    static async publish(userID,roomID, message ){
+        let PUB_SUB_CL = RedisSubscriberPool.retievePubSubClient(userID);
+        if(PUB_SUB_CL.status != true){
+            console.error("connection not established");
+            return;
+        }
+        await PUB_SUB_CL.client.publish(`room:${roomID}`,message);
+    }
+
     static async unsubscribe(userID,roomID){
         let PUB_SUB_CL = RedisSubscriberPool.retievePubSubClient(userID);
          if(PUB_SUB_CL.status != true){
@@ -325,6 +351,7 @@ class RedisSubscriberPool{
         }
     }
 }
+
 
 new RedisSubscriberPool();
 new UserPool();
@@ -358,17 +385,28 @@ async function createRoom(){
     }
     // we can add a round logic for the next available room for a loop of 50000 rooms
     CLIENT.set('roomNumber' ,tempResult); // this can cause  race conditions // how can I avoid it ?
+
+    // avoidance guidance from gemini : /
+    /**
+     * 
+     * The createRoom function is susceptible to a race condition when incrementing the roomNumber. Multiple concurrent requests could read the same value before it's updated, resulting in duplicate room numbers. 
+     * This can be mitigated by using Redis's atomic INCR command, which guarantees that the increment operation is performed as a single, indivisible step.
+     */
     return tempResult;
 
 }
 
 async function joinRoom(roomID, socketID){
-    let userID = UserPool.getUserID(socketID);
+    let {userID, listener} = UserPool.getUserID(socketID);
     let roomJoined = await CLIENT.sendCommand(['SADD',`room:${roomID}`,userID]);
+
     await CLIENT.sendCommand(['PERSIST', `room:${roomID}`]);
     let roomAssigned = await CLIENT.sendCommand(['SET',userID,`room:${roomID}`]);
 
-    await RedisSubscriberPool.subscribe(userID,roomID,()=>{ /** need a subscription handler */}); // this subscription handler should be a event listener
+    await RedisSubscriberPool.subscribe(userID,roomID,listener.receive); // this subscription handler should be a event listener
+    listener.on('send',async (message)=>{
+        await RedisSubscriberPool.publish(userID,roomID,message)
+    })
     /**
      * ehy   ? if I just add a function it would execute the function, however if I use  eventEmmitter I can pass the message to my socket by listeing to the event emitter and not creating seperate handling functions for each of my sockets
         but I would definitely require a place to store all my eventListeners 
@@ -381,7 +419,7 @@ async function joinRoom(roomID, socketID){
 
 async function leaveRoom(roomID , socketID) {
     
-    let userID = UserPool.getUserID(socketID);
+    let {userID, listener} = UserPool.getUserID(socketID);
     let roomleft = await CLIENT.sendCommand(['SREM',`room:${roomID}`,userID ]);
 
     let roomFilledCapacity = await CLIENT.sendCommand(['SCARD', `room:${roomID}`]);
@@ -393,6 +431,7 @@ async function leaveRoom(roomID , socketID) {
     let roomUnAssigned = await CLIENT.sendCommand(['DEL',userID]);
     await userPubSubCL.sendCommand(['PUBLISH',`room:${roomID}`, `${userID} has Left` ]);
     await RedisSubscriberPool.unsubscribe(userID,roomID);
+    listener.remove('send');
     // similarly unsubscription command;
 }
 
@@ -402,7 +441,14 @@ async function disconnectUser(socketID){
     return;
 }
 
-
+function handleIncomingMessage(socket){
+    let {id} = socket;
+    let {userID, listener} = UserPool.getUserID(id);
+    listener.on('receive',(message)=>{
+        socket.emit('incoming',{"message" : JSON.stringify(message)})
+    })
+    return
+}
 
 /// notes about redis subscription:
 // - dynamically created (if not present)
@@ -410,8 +456,9 @@ async function disconnectUser(socketID){
 // syntaxt for channel that we use ('roo:id') 
 
 
-// -------------------------------- a lvie process redis command executed for console admin --------------------------
 
+// -------------------------------- a lvie process redis command executed for console admin --------------------------
+// geminin insight : Storing and comparing hashed passwords using a strong, salted hashing algorithm like bcrypt is essential to prevent unauthorized access.[26]
 if(process.env.USER == 'admin'){
     let isAAdmin = false;
     process.stdin.on('data',async (data)=>{
