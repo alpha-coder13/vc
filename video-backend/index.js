@@ -37,21 +37,104 @@ function createRoom(){
 commenting the above as to test new redis createRooms
 */
 
-function handleSocket(socket){
-    // const peerList = io
-    // socket.emit("message",{"peerList" : } )
+// function handleSocket(socket){
+//     // const peerList = io
+//     // socket.emit("message",{"peerList" : } )
 
+//     socket.on('joinRoom',(data)=>{
+//        if(!data.RoomID ||  RoomSet.get(data.RoomID) == 'undefined'){
+//             socket.emit('error',{"message" : "Not a Valid RoomID , Create one or Join a Valid Room"})
+//             return;
+//        }else if(RoomSet.get(data.RoomID).size == 2){
+//             socket.emit('error',{"message" : "RoomFull , Please wait or contact the Room Owner"})
+//             return;
+//        }else{
+//         ioArray.set(socket.id,data.RoomID);
+//         RoomSet.get(data.RoomID).add(socket)
+//         RoomInterVals.delete(data.RoomID);
+//         socket.emit('joined',"success");
+//          return ;
+//        }
+//     })
+
+//     socket.on('sendOffer',(data)=>{
+//         const RoomID = ioArray.get(socket.id);
+//         if(!RoomID){
+//             socket.emit('error',{'message' : "not in a valid room"});
+//             return;
+//         }
+//         RoomSet.get(RoomID).forEach((value)=>{
+//             if(value!=socket){
+//                 value.emit('message',data)
+//             }
+//         })
+//     })
+
+//     socket.on('sendAnswer',(data)=>{
+//         const RoomID = ioArray.get(socket.id);
+//         if(!RoomID){
+//             socket.emit('error',{'message' : "not in a valid room"});
+//             return;
+//         }
+//         RoomSet.get(RoomID).forEach((value)=>{
+//             if(value!=socket){
+//                 value.emit('message',data)
+//             }
+//         })
+//     })
+
+//     socket.on('iceCandidate',(data)=>{
+//         const RoomID = ioArray.get(socket.id);
+//         if(!RoomID){
+//             socket.emit('error',{'message' : "not in a valid room"});
+//             return;
+//         }
+//         RoomSet.get(RoomID).forEach((value)=>{
+//             if(value!=socket){
+//                 value.emit('message',{"iceCandidate":data})
+//             }
+//         })
+//     })
+
+//     socket.on('disconnect',(data)=>{
+//         const RoomID = ioArray.get(socket.id);
+//         if(RoomID){
+//             RoomSet.get(RoomID).delete(socket);
+//             ioArray.delete(socket.id);
+//             if(RoomSet.get(RoomID).size == 0){
+//                 expireRoom(RoomID);
+//             }
+//         }        
+//         console.log("client disconnected", socket.id);
+//     })
+
+//     socket.on('chatMessage',(data)=>{
+//         const RoomID = ioArray.get(socket.id);
+//         if(!RoomID){
+//            socket.emit('error',{'message' : "not in a valid room"});
+//            return;
+//         } 
+//         RoomSet.get(RoomID).forEach((val1) => {
+//             if(val1 !== socket){
+//                console.log(data, val1.id, socket.id);
+//                 val1.emit('incoming',{"message" : JSON.stringify(data)});
+//             }
+//         })
+//     })
+// }
+
+function handleSocket(socket){
     socket.on('joinRoom',(data)=>{
-       if(!data.RoomID ||  RoomSet.get(data.RoomID) == 'undefined'){
+        console.log(data);
+       if(!data.RoomID){
             socket.emit('error',{"message" : "Not a Valid RoomID , Create one or Join a Valid Room"})
             return;
-       }else if(RoomSet.get(data.RoomID).size == 2){
-            socket.emit('error',{"message" : "RoomFull , Please wait or contact the Room Owner"})
-            return;
-       }else{
-        ioArray.set(socket.id,data.RoomID);
-        RoomSet.get(data.RoomID).add(socket)
-        RoomInterVals.delete(data.RoomID);
+       }//else if(RoomSet.get(data.RoomID).size == 2){
+            // socket.emit('error',{"message" : "RoomFull , Please wait or contact the Room Owner"})
+            // return;
+       //}
+       else{
+        joinRoom(data.RoomID, socket.id);
         socket.emit('joined',"success");
          return ;
        }
@@ -123,7 +206,6 @@ function handleSocket(socket){
     })
 }
 
-
 // function expireRoom(RoomID){
 //     const deleteRoom = setTimeout(() => {
 //         RoomSet.delete(RoomID);
@@ -138,7 +220,7 @@ ioServer.on("connection",(socket)=>{
     handleSocket(socket);
 })
 
-ioServer.on("disconnect")
+// ioServer.on("disconnect")
 
 
 
@@ -236,7 +318,7 @@ const EXPIRE_ROOM_DURATION = 10*60; //seconds
 class RedisConnector{
     #redisClient;
     #connectionStatus; 
-    constructor(username=process.env.REDIS_RW_USERNAME , password=process.env.REDIS_RW_PASSWORD, hostname=process.env.REDIS_RW_HOSTNAME, port=process.env.REDIS_RW_PORT){
+    constructor(username=process.env.REDIS_RW_USERNAME , password=process.env.REDIS_RW_PASSWORD, host=process.env.REDIS_RW_HOSTNAME, port=process.env.REDIS_RW_PORT){
         if(this.#redisClient == null || this.#redisClient == undefined){
             const {createClient} = require('redis');
             this.#redisClient = createClient({
@@ -282,7 +364,8 @@ class UserPool{
 
     static getUserID(socketID){
         if(!UserPool.#pool.has(socketID)){
-            UserPool.#pool.set(socketID,{userID :`vc-user:${UserPool.#connectionCount+1}`, listener : new PublishEventListener() });
+
+            UserPool.#pool.set(socketID,{userID :`vc-user:${UserPool.#connectionCount+1}`, listener :new PublishEventListener()  });
             UserPool.#connectionCount++;      
         }
         return UserPool.#pool.get(socketID);
@@ -304,8 +387,11 @@ class RedisSubscriberPool{
     static retievePubSubClient(userID){
         let PUB_SUB_CL;  
         if(!RedisSubscriberPool.#pool.has(userID)){
-            PUB_SUB_CL = new RedisConnector(process.env.REDIS_PUBSUB_HOSTNAME,process.env.REDIS_PUBSUB_USERNAME,process.env.REDIS_PUBSUB_PASSWORD,process.env.REDIS_PUBSUB_PORT);
+            let SUB_CL = new RedisConnector(process.env.REDIS_PUBSUB_USERNAME,process.env.REDIS_PUBSUB_PASSWORD,process.env.REDIS_PUBSUB_HOSTNAME,process.env.REDIS_PUBSUB_PORT);
+            let PUB_CL = new RedisConnector(process.env.REDIS_PUBSUB_USERNAME,process.env.REDIS_PUBSUB_PASSWORD,process.env.REDIS_PUBSUB_HOSTNAME,process.env.REDIS_PUBSUB_PORT);
+            PUB_SUB_CL = {SUB_CL,PUB_CL};
             RedisSubscriberPool.#pool.set(userID,PUB_SUB_CL);
+
         }else{
             PUB_SUB_CL = RedisSubscriberPool.#pool.get(userID);
         }
@@ -314,11 +400,15 @@ class RedisSubscriberPool{
 
     static async subscribe(userID,roomID,subscriptionHandler){
         let PUB_SUB_CL = RedisSubscriberPool.retievePubSubClient(userID);
-        if(PUB_SUB_CL.status != true){
-            console.error("connection not established");
-            return;
+        // if(await PUB_SUB_CL.status != true){
+        //     console.error("connection not established");
+        //     return;
+        // }
+        try{
+        await PUB_SUB_CL.SUB_CL.client.subscribe(`room:${roomID}`,subscriptionHandler);
+        }catch(e){
+            console.error(e);
         }
-        await PUB_SUB_CL.client.subscribe(`room:${roomID}`,subscriptionHandler);
         // handle subscription error
     }
 
@@ -328,7 +418,7 @@ class RedisSubscriberPool{
             console.error("connection not established");
             return;
         }
-        await PUB_SUB_CL.client.publish(`room:${roomID}`,message);
+        await PUB_SUB_CL.PUB_CL.client.publish(`room:${roomID}`,message);
     }
 
     static async unsubscribe(userID,roomID){
@@ -338,16 +428,20 @@ class RedisSubscriberPool{
             return;
         }
 
-        await PUB_SUB_CL.client.unsubscribe(`room:${roomID}`);
+        await PUB_SUB_CL.SUB_CL.client.unsubscribe(`room:${roomID}`);
         // handle unsubscription error
     }
 
-    static deletePubSubClient(userID){
+    static async deletePubSubClient(userID){
         let PUB_SUB_CL = RedisSubscriberPool.retievePubSubClient(userID);
         if(PUB_SUB_CL){
-            PUB_SUB_CL.disconnect().then(()=>{
+            try{
+                PUB_SUB_CL.SUB_CL.disconnect();
+                PUB_SUB_CL.PUB_CL.disconnect();
                 RedisSubscriberPool.#pool.delete(userID);
-            }).catch(console.error /*error in closing connection*/);
+            }catch(e){
+                console.error(e)
+            }
         }
     }
 }
@@ -376,15 +470,15 @@ const {client:CLIENT, status : STATUS} = new RedisConnector();
 async function createRoom(){
     // here we assume the redis client is at cglobal object assigned to CLIENT
 
-    let tempResult = await CLIENT.get('roomNumber');
-    console.log(tempResult);
-    if(tempResult == null){
-        tempResult = 0;
-    }else{
-        tempResult++;
-    }
+    // let tempResult = await CLIENT.get('roomNumber');
+    // console.log(tempResult);
+    // if(tempResult == null){
+    //     tempResult = 0;
+    // }else{
+    //     tempResult++;
+    // }
     // we can add a round logic for the next available room for a loop of 50000 rooms
-    CLIENT.set('roomNumber' ,tempResult); // this can cause  race conditions // how can I avoid it ?
+    // CLIENT.set('roomNumber' ,tempResult); // this can cause  race conditions // how can I avoid it ?
 
     // avoidance guidance from gemini : /
     /**
@@ -392,6 +486,9 @@ async function createRoom(){
      * The createRoom function is susceptible to a race condition when incrementing the roomNumber. Multiple concurrent requests could read the same value before it's updated, resulting in duplicate room numbers. 
      * This can be mitigated by using Redis's atomic INCR command, which guarantees that the increment operation is performed as a single, indivisible step.
      */
+
+     await CLIENT.sendCommand(['INCR','roomNumber']);
+     let tempResult = await CLIENT.get('roomNumber');
     return tempResult;
 
 }
@@ -403,7 +500,8 @@ async function joinRoom(roomID, socketID){
     await CLIENT.sendCommand(['PERSIST', `room:${roomID}`]);
     let roomAssigned = await CLIENT.sendCommand(['SET',userID,`room:${roomID}`]);
 
-    await RedisSubscriberPool.subscribe(userID,roomID,listener.receive); // this subscription handler should be a event listener
+    await RedisSubscriberPool.subscribe(userID,roomID,(data) =>{listener.receive(data)}); // this subscription handler should be a event listener
+    // the change in this commit highlights the problem of undeined context of this, when function defination is detached , the this context gets removed which gave the erro rin the previous commit
     listener.on('send',async (message)=>{
         await RedisSubscriberPool.publish(userID,roomID,message)
     })
@@ -411,8 +509,12 @@ async function joinRoom(roomID, socketID){
      * ehy   ? if I just add a function it would execute the function, however if I use  eventEmmitter I can pass the message to my socket by listeing to the event emitter and not creating seperate handling functions for each of my sockets
         but I would definitely require a place to store all my eventListeners 
     */
+   try{
     let userPubSubCL = await RedisSubscriberPool.retievePubSubClient(userID);
-    await userPubSubCL.sendCommand(['PUBLISH',`room:${roomID}`, `${userID} has joined` ]);
+    await userPubSubCL.PUB_CL.client.sendCommand(['PUBLISH',`room:${roomID}`, `${userID} has joined` ]);
+   }catch(e){
+    console.error(e);
+   }
     /// here the user subscription is required as well  to be subscribing to the room ID
 }
 
